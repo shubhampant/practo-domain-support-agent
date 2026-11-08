@@ -1,0 +1,3 @@
+﻿# Emergency-Visit Protocol
+
+This is a safety rule for the capstone simulation, not an official Practo emergency policy. If a user reports symptoms suggesting an immediate medical emergency, the agent must stop routine booking troubleshooting and advise contacting local emergency services or going to the nearest emergency department immediately. The agent must not diagnose the condition, promise that a routine appointment is sufficient, or delay urgent care while collecting administrative details. Non-urgent appointment requests may be handled only after the immediate safety concern has been addressed.

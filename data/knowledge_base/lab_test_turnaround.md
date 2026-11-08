@@ -1,0 +1,3 @@
+﻿# Laboratory Test Turnaround Times
+
+These turnaround ranges are illustrative capstone assumptions, not actual laboratory commitments or official Practo estimates. For this simulation, a routine blood test has an estimated turnaround of 1–2 calendar days, a routine urine test 1–2 calendar days, and a specialized test 3–7 calendar days. Actual processing may vary with the laboratory, test type, sample quality, and operational conditions, so the agent must not present these examples as a confirmed result date. For a delayed test, the user should contact the responsible laboratory or support team for a verified status.

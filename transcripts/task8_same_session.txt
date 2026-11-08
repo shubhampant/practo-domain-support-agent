@@ -1,0 +1,121 @@
+TASK 8 — SAME-SESSION MULTI-TURN DEMONSTRATION
+=======================================================
+Session ID: task8-demo-same-session
+
+TURN 1 — Initial question
+User: What is the cancellation policy?
+History before turn 1:
+No previous conversation.
+
+Assistant/tool result for turn 1:
+{
+  "mode": "rag",
+  "session_id": "task8-demo-same-session",
+  "output": "Based only on the available knowledge base: Window These are fictional capstone rules, not official Practo cancellation policies. In this simulation, a user may request cancellation or rescheduling at least 24 hours before the appointment start time without a simulated late-change restriction. Policy These are fictional rules for the Practo Domain Support Agent capstone, not official Practo policies. Sources: appointment_booking.md, cancellation_rescheduling.md",
+  "structured_response": {
+    "mode": "rag",
+    "status": "answered",
+    "answer": "Based only on the available knowledge base: Window These are fictional capstone rules, not official Practo cancellation policies. In this simulation, a user may request cancellation or rescheduling at least 24 hours before the appointment start time without a simulated late-change restriction. Policy These are fictional rules for the Practo Domain Support Agent capstone, not official Practo policies.",
+    "sources": [
+      "appointment_booking.md",
+      "cancellation_rescheduling.md"
+    ],
+    "record_id": null,
+    "consultation_fee_inr": null,
+    "escalation_score": null,
+    "escalation_recommended": null
+  },
+  "tool_invocations": [
+    {
+      "tool": "rag_lookup",
+      "arguments": {
+        "query": "What is the cancellation policy?"
+      }
+    }
+  ],
+  "tool_results": [
+    {
+      "kind": "rag",
+      "result": {
+        "query": "What is the cancellation policy?",
+        "status": "grounded_answer",
+        "answer": "Based only on the available knowledge base: Window These are fictional capstone rules, not official Practo cancellation policies. In this simulation, a user may request cancellation or rescheduling at least 24 hours before the appointment start time without a simulated late-change restriction. Policy These are fictional rules for the Practo Domain Support Agent capstone, not official Practo policies.",
+        "similarity": 0.5824,
+        "threshold": 0.4026,
+        "sources": [
+          "appointment_booking.md",
+          "cancellation_rescheduling.md"
+        ]
+      }
+    }
+  ],
+  "guardrail": {
+    "allowed": true,
+    "reason": "allowed"
+  }
+}
+
+History after turn 1:
+User: What is the cancellation policy?
+Assistant: Based only on the available knowledge base: Window These are fictional capstone rules, not official Practo cancellation policies. In this simulation, a user may request cancellation or rescheduling at least 24 hours before the appointment start time without a simulated late-change restriction. Policy These are fictional rules for the Practo Domain Support Agent capstone, not official Practo policies. Sources: appointment_booking.md, cancellation_rescheduling.md
+
+TURN 2 — Context-dependent follow-up
+User: What if I need to cancel it?
+History supplied before turn 2:
+User: What is the cancellation policy?
+Assistant: Based only on the available knowledge base: Window These are fictional capstone rules, not official Practo cancellation policies. In this simulation, a user may request cancellation or rescheduling at least 24 hours before the appointment start time without a simulated late-change restriction. Policy These are fictional rules for the Practo Domain Support Agent capstone, not official Practo policies. Sources: appointment_booking.md, cancellation_rescheduling.md
+
+Assistant/tool result for turn 2:
+{
+  "mode": "rag",
+  "session_id": "task8-demo-same-session",
+  "output": "Based only on the available knowledge base: In this simulation, a user may request cancellation or rescheduling at least 24 hours before the appointment start time without a simulated late-change restriction. Completed and already-cancelled appointments cannot be rescheduled through this workflow, and every change must be verified against the appointment record. Window These are fictional capstone rules, not official Practo cancellation policies. Sources: cancellation_rescheduling.md",
+  "structured_response": {
+    "mode": "rag",
+    "status": "answered",
+    "answer": "Based only on the available knowledge base: In this simulation, a user may request cancellation or rescheduling at least 24 hours before the appointment start time without a simulated late-change restriction. Completed and already-cancelled appointments cannot be rescheduled through this workflow, and every change must be verified against the appointment record. Window These are fictional capstone rules, not official Practo cancellation policies.",
+    "sources": [
+      "cancellation_rescheduling.md"
+    ],
+    "record_id": null,
+    "consultation_fee_inr": null,
+    "escalation_score": null,
+    "escalation_recommended": null
+  },
+  "tool_invocations": [
+    {
+      "tool": "rag_lookup",
+      "arguments": {
+        "query": "Appointment cancellation and rescheduling policy. Customer follow-up question: What if I need to cancel it?"
+      }
+    }
+  ],
+  "tool_results": [
+    {
+      "kind": "rag",
+      "result": {
+        "query": "Appointment cancellation and rescheduling policy. Customer follow-up question: What if I need to cancel it?",
+        "status": "grounded_answer",
+        "answer": "Based only on the available knowledge base: In this simulation, a user may request cancellation or rescheduling at least 24 hours before the appointment start time without a simulated late-change restriction. Completed and already-cancelled appointments cannot be rescheduled through this workflow, and every change must be verified against the appointment record. Window These are fictional capstone rules, not official Practo cancellation policies.",
+        "similarity": 0.6706,
+        "threshold": 0.4026,
+        "sources": [
+          "cancellation_rescheduling.md"
+        ]
+      }
+    }
+  ],
+  "guardrail": {
+    "allowed": true,
+    "reason": "allowed"
+  }
+}
+
+History after turn 2:
+User: What is the cancellation policy?
+Assistant: Based only on the available knowledge base: Window These are fictional capstone rules, not official Practo cancellation policies. In this simulation, a user may request cancellation or rescheduling at least 24 hours before the appointment start time without a simulated late-change restriction. Policy These are fictional rules for the Practo Domain Support Agent capstone, not official Practo policies. Sources: appointment_booking.md, cancellation_rescheduling.md
+User: What if I need to cancel it?
+Assistant: Based only on the available knowledge base: In this simulation, a user may request cancellation or rescheduling at least 24 hours before the appointment start time without a simulated late-change restriction. Completed and already-cancelled appointments cannot be rescheduled through this workflow, and every change must be verified against the appointment record. Window These are fictional capstone rules, not official Practo cancellation policies. Sources: cancellation_rescheduling.md
+
+Verification:
+PASS — the same session ID was used for both turns.

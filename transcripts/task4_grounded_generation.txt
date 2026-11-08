@@ -1,0 +1,60 @@
+
+===========================================================================
+DEMONSTRATION 1
+===========================================================================
+Query: How many hours before an appointment can I cancel?
+Status: grounded_answer
+Similarity: 0.6715
+Threshold: 0.4026
+Answer: Based only on the available knowledge base: In this simulation, a user may request cancellation or rescheduling at least 24 hours before the appointment start time without a simulated late-change restriction. Requests made less than 24 hours before the appointment require human-support review, and the agent must not promise approval or a refund. Completed and already-cancelled appointments cannot be rescheduled through this workflow, and every change must be verified against the appointment record.
+Sources: ['cancellation_rescheduling.md']
+
+===========================================================================
+DEMONSTRATION 2
+===========================================================================
+Query: What is the cardiology consultation fee range?
+Status: grounded_answer
+Similarity: 0.7338
+Threshold: 0.4026
+Answer: Based only on the available knowledge base: Cardiology INR 600–1800. These are synthetic capstone fee values, not official Practo prices.
+Sources: ['consultation_fees.md']
+
+===========================================================================
+DEMONSTRATION 3
+===========================================================================
+Query: How long does a routine blood test take?
+Status: grounded_answer
+Similarity: 0.6051
+Threshold: 0.4026
+Answer: Based only on the available knowledge base: For this simulation, a routine blood test has an estimated turnaround of 1–2 calendar days, a routine urine test 1–2 calendar days, and a specialized test 3–7 calendar days.
+Sources: ['lab_test_turnaround.md']
+
+===========================================================================
+DEMONSTRATION 4
+===========================================================================
+Query: What conditions are required for telemedicine?
+Status: grounded_answer
+Similarity: 0.5815
+Threshold: 0.4026
+Answer: Based only on the available knowledge base: In the simulation, a user is eligible to request a remote consultation when a provider offers the required specialty and a remote appointment slot is available for the requested time.
+Sources: ['emergency_protocol.md', 'telemedicine.md']
+
+===========================================================================
+DEMONSTRATION 5
+===========================================================================
+Query: How can a patient request a second opinion?
+Status: grounded_answer
+Similarity: 0.811
+Threshold: 0.4026
+Answer: Based only on the available knowledge base: A user requesting a second opinion may search for or request an appointment with another suitably qualified clinician, subject to provider and appointment availability.
+Sources: ['second_opinion.md']
+
+===========================================================================
+DEMONSTRATION 6
+===========================================================================
+Query: Who won the FIFA World Cup in 2018?
+Status: insufficient_evidence
+Similarity: 0.1118
+Threshold: 0.4026
+Answer: I don't know. The available knowledge base does not contain sufficient supporting information.
+Sources: []

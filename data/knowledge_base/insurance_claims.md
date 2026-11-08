@@ -1,0 +1,3 @@
+﻿# Insurance Claim Process
+
+These are fictional capstone support rules, not official Practo insurance policies. The simulated claim process has four steps: collect the claim reference, check that the required supporting documents are listed, record the claim status available from the authorized source, and direct unresolved eligibility or reimbursement questions to the insurer or human support. The agent must not claim that a policy covers a service or guarantee reimbursement without verified evidence. Insurance identifiers and documents must be handled only through authorized workflows and must not be unnecessarily repeated in responses or logs.

@@ -1,0 +1,3 @@
+﻿# Patient-Data Privacy Policy
+
+These are fictional capstone privacy rules and are not a complete legal privacy policy. The agent should collect only the minimum information needed for the support task and verify authorization before disclosing appointment information. Contact numbers must be masked by the input-side guardrail before model processing or inclusion in logs, using the project's defined fixed-format contact-number rule. Patient names, diagnoses or conditions, and insurance IDs are outside the guaranteed detection scope of the simple keyless mock masker, so tests must use fabricated examples and the agent must not claim these fields are reliably masked.
