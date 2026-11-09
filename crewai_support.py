@@ -24,6 +24,8 @@ from grounded_generator import GroundedSupportAgent
 from session_memory import SessionMemory
 from response_schema import SupportResponse
 from guardrails import guard_input, mask_contact_numbers
+from pathlib import Path
+import subprocess
 
 # Tool execution audit records.
 TOOL_INVOCATIONS: list[dict[str, Any]] = []
@@ -268,6 +270,68 @@ def _build_structured_response(mode: str) -> dict[str, Any]:
         raise ValueError("mode must be either 'rag' or 'lookup'.")
 
     return response.model_dump()
+
+
+def _run_autogen_review(
+    *,
+    query: str,
+    draft: str,
+    context: str,
+) -> dict[str, Any]:
+    """Run the isolated AutoGen reviewer and return its JSON result."""
+
+    project_dir = Path(__file__).resolve().parent
+    autogen_python = (
+        project_dir / ".venv-autogen" / "Scripts" / "python.exe"
+    )
+    autogen_script = project_dir / "autogen_review.py"
+
+    if not autogen_python.is_file():
+        raise FileNotFoundError(
+            f"AutoGen Python environment not found: {autogen_python}"
+        )
+
+    if not autogen_script.is_file():
+        raise FileNotFoundError(
+            f"AutoGen review script not found: {autogen_script}"
+        )
+
+    payload = {
+        "query": query,
+        "draft": draft,
+        "context": context,
+    }
+
+    completed = subprocess.run(
+        [
+            str(autogen_python),
+            str(autogen_script),
+            "--json-stdin",
+        ],
+        input=json.dumps(payload, ensure_ascii=False),
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=True,
+        cwd=str(project_dir),
+    )
+
+    result = json.loads(completed.stdout)
+
+    verdict = result.get("verdict")
+    if not isinstance(verdict, dict):
+        raise ValueError("AutoGen returned no structured verdict.")
+
+    if not isinstance(verdict.get("approved"), bool):
+        raise ValueError("AutoGen verdict has an invalid approved field.")
+
+    if not isinstance(verdict.get("final_answer"), str):
+        raise ValueError("AutoGen verdict has an invalid final_answer field.")
+
+    if not isinstance(verdict.get("reason"), str):
+        raise ValueError("AutoGen verdict has an invalid reason field.")
+
+    return result
 
 
 class DeterministicMockLLM(BaseLLM):
@@ -598,12 +662,54 @@ def run_support_crew(
 
     structured_response = _build_structured_response(mode)
 
+
+    review_metadata: dict[str, Any] | None = None
+
+    if mode == "rag" and structured_response["status"] == "answered":
+        rag_result = _latest_result("rag")
+        context = rag_result.get("context", "")
+
+        if isinstance(context, str) and context.strip():
+            try:
+                review_result = _run_autogen_review(
+                    query=current_message,
+                    draft=output,
+                    context=context,
+                )
+
+                verdict = review_result["verdict"]
+                structured_response["answer"] = verdict["final_answer"]
+
+                review_metadata = {
+                    "status": "completed",
+                    "verdict": verdict,
+                    "turn_count": review_result.get("turn_count"),
+                    "trace": review_result.get("trace", []),
+                }
+
+            except Exception as exc:
+                # Preserve the original grounded answer if review fails.
+                review_metadata = {
+                    "status": "failed",
+                    "error": f"{type(exc).__name__}: {exc}",
+                }
+        else:
+            review_metadata = {
+                "status": "skipped",
+                "reason": "No original retrieved context was available.",
+            }
+
     # Store the masked current message, not the original raw query.
+    memory_answer = structured_response["answer"]
+
     SESSION_MEMORY.add_turn(
         effective_session_id,
         current_message,
-        output,
+        memory_answer,
     )
+
+    if review_metadata and review_metadata.get("status") == "completed":
+        output = structured_response["answer"]
 
     return {
         "mode": mode,
@@ -613,6 +719,7 @@ def run_support_crew(
         "tool_invocations": list(TOOL_INVOCATIONS),
         "tool_results": list(TOOL_RESULTS),
         "guardrail": guardrail_metadata,
+        "review": review_metadata,
     }
 
 

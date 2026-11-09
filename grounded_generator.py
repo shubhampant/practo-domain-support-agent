@@ -144,9 +144,7 @@ class MockGroundedGenerator:
             text = re.sub(pattern, " ", text, flags=re.IGNORECASE)
 
         return [
-            part.strip()
-            for part in re.split(r"(?<=[.!?])\s+", text)
-            if part.strip()
+            part.strip() for part in re.split(r"(?<=[.!?])\s+", text) if part.strip()
         ]
 
     def generate(self, query, evidence):
@@ -324,7 +322,7 @@ class GroundedSupportAgent:
                 "sources": [],
             }
 
-# Verify generated content before returning it to the caller.
+        # Verify generated content before returning it to the caller.
         evidence = retrieval_result["evidence"]
         answer = self.generator.generate(query, evidence)
 
@@ -366,6 +364,9 @@ class GroundedSupportAgent:
             "threshold": SIMILARITY_THRESHOLD,
             "sources": sorted(
                 {item["source"] for item in evidence if item.get("source")}
+            ),
+            "context": "\n\n".join(
+                item["text"] for item in evidence if item.get("text")
             ),
         }
 

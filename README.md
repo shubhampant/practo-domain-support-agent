@@ -2,7 +2,7 @@
 
 **Capstone track: Practo (Healthcare).**
 
-This repository implements a local-first support-agent prototype for answering synthetic clinic-policy questions and looking up synthetic appointment records. Part 1 — Tasks 1–5 and Part 2 — Tasks 6–10 have implementation and automated-test evidence. Task 8 is complete, including the required same-session and fresh-session transcript demonstrations. Part 3 — Tasks 11–13 have implementation and verification evidence. Part 4 — Tasks 14–16 remains pending.
+This repository implements a local-first support-agent prototype for answering synthetic clinic-policy questions and looking up synthetic appointment records. Part 1 — Tasks 1–5 and Part 2 — Tasks 6–10 have implementation and automated-test evidence. Task 8 is complete, including the required same-session and fresh-session transcript demonstrations. Part 3 — Tasks 11–13 have implementation and verification evidence. Part 4 — Task 14 has an implemented AutoGen review stage with deterministic mock demonstrations and integration tests. Tasks 15–16 remain pending.
 
 > **Important simulation disclaimer:** The appointment data and all policy documents in this repository are synthetic capstone material. The fee ranges, cancellation window, turnaround times, and other policy statements are illustrative rules for this project, not official Practo policies or medical advice. Never use real patient data in this project.
 
@@ -24,6 +24,7 @@ This repository implements a local-first support-agent prototype for answering s
 - [Part 3 — Task 11: FastAPI deployment](#part-3--task-11-fastapi-deployment)
 - [Part 3 — Task 12: Structured logging](#part-3--task-12-structured-logging)
 - [Part 3 — Task 13: Answer-quality evaluation](#part-3--task-13-answer-quality-evaluation)
+- [Part 4 — Task 14: AutoGen review stage](#part-4--task-14-autogen-review-stage)
 - [Test suite](#test-suite)
 - [Current evaluation summary](#current-evaluation-summary)
 - [Known limitations](#known-limitations)
@@ -47,7 +48,7 @@ This repository implements a local-first support-agent prototype for answering s
 | Part 3, Task 11 — FastAPI deployment | Implemented and verified | `api.py`, `tests/test_api.py`; HTTP, WebSocket and disconnect-recovery checks |
 | Part 3, Task 12 — structured logging | Implemented and tested | `api.py`, `tests/test_api.py`; JSONL events, trace IDs, timing and contact-number masking |
 | Part 3, Task 13 — 15-query answer-quality evaluation | Implemented and verified | `run_answer_quality_evaluation.py`, `answer_quality_dataset.py`, `answer_quality_results.json`, `task13_report_details.txt` |
-| Part 4, Task 14 — AutoGen review stage | Pending | Approval/revision demonstrations and structured verdicts remain to be completed |
+| Part 4, Task 14 — AutoGen review stage | Implemented and tested | `autogen_review.py`, `tests/test_autogen_review.py`; two-agent bounded review, Pydantic verdict, approve/revise demonstrations, CrewAI integration |
 | Part 4, Task 15 — governance and budget cap | Pending | Least-autonomy enforcement, risk classification and runtime budget rejection remain to be completed |
 | Part 4, Task 16 — response caching | Pending | Cache-hit demonstration and before/after evidence remain to be completed |
 
@@ -115,6 +116,7 @@ The development environment used for the verified runs was:
 - SentenceTransformers with a local `all-MiniLM-L6-v2` embedding model.
 - ChromaDB for local vector storage.
 - CrewAI for multi-agent orchestration.
+- AutoGen AgentChat/Core in the isolated `.venv-autogen` environment for Task 14 review.
 - FastAPI for the application API.
 - Pytest for automated tests.
 - Deterministic mock-model behavior for the capstone's offline-oriented demonstrations.
@@ -154,7 +156,7 @@ For a fully offline machine, prepare dependencies and the embedding model in adv
 python -m pytest -v
 ```
 
-The latest previously reported full-suite run after Tasks 11–12 was **110 passed, 0 failed**, with 661 CrewAI deprecation warnings. Run the command again after any code changes to establish the current result.
+The latest full-suite run after Task 14 integration reported **115 passed, 0 failed**, with 661 CrewAI deprecation warnings. Re-run the suite after further code changes to establish the current result.
 
 Warnings are not test failures, but they should be reviewed when upgrading CrewAI or related dependencies.
 
@@ -784,6 +786,146 @@ The report records these limitations and sets `human_review_required` to `true`.
 
 The evaluator should be described accurately in demonstrations and submission material: it is a deterministic mock evaluation harness operating in `MOCK_LLM` mode, not a semantic LLM-as-judge implementation.
 
+## Part 4 — Task 14: AutoGen review stage
+
+Task 14 adds a bounded AutoGen review step after the existing CrewAI support workflow drafts an answer. The existing three-agent CrewAI workflow remains in place. For an answerable RAG response, `crewai_support.py` passes the user's query, the CrewAI draft answer, and the retrieved evidence text to `autogen_review.py`.
+
+### Design
+
+- `autogen_review.py` defines the Pydantic `ReviewVerdict` schema:
+  - `approved: bool`
+  - `final_answer: str`
+  - `reason: str`
+- The AutoGen team uses `RoundRobinGroupChat` with `max_turns=2`.
+- The two agents are `Policy_Compliance_Reviewer` and `Final_Editor`.
+- The Final-Editor uses `output_content_type=ReviewVerdict`.
+- The team registers `StructuredMessage[ReviewVerdict]` in `custom_message_types`.
+- The review input includes the original query, the draft, and the retrieved context.
+- The deterministic mock implementation allows the demonstrations and tests to run without a hosted LLM API key. AutoGen dependencies are isolated in `.venv-autogen` so they do not disturb the existing `.venv` used by CrewAI.
+
+When the verdict is returned, `crewai_support.py` updates the structured answer and output with `final_answer` and exposes review metadata, including the verdict, turn count, and message trace. If the review subprocess fails, the integration preserves the original grounded answer and records the review failure instead of silently replacing the answer.
+
+### Run the two deterministic demonstrations
+
+From the project root in PowerShell:
+
+```powershell
+$env:OPENAI_API_KEY = ""
+$env:CREWAI_DISABLE_TELEMETRY = "true"
+.\.venv-autogen\Scripts\python.exe .\autogen_review.py
+```
+
+The demonstration covers two cases:
+
+1. **Approve unchanged:** a draft that states the synthetic cancellation/rescheduling window is at least 24 hours before the appointment. The verdict approves the draft and retains the same answer.
+2. **Revise unsupported claim:** a draft includes “Our clinic guarantees a full refund for every cancellation,” but the supplied context does not support that guarantee. The verdict rejects the draft as written and removes the unsupported guarantee from the final answer.
+
+The script reports the structured verdict, the two-turn message trace, and the turn count. These are deterministic mock demonstrations, not proof of general-purpose semantic reasoning.
+
+### Run Task 14 tests
+
+```powershell
+.\.venv-autogen\Scripts\python.exe -m pytest .\tests\test_autogen_review.py -v
+```
+
+Previously verified result:
+
+```text
+4 passed
+```
+
+The tests cover approval without changing a supported draft, removal of the configured unsupported refund-guarantee phrase, the reviewer/editor message trace, and execution without `OPENAI_API_KEY`.
+
+Run the integration/regression checks from the project root:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest .\tests\test_grounded_generator.py .\tests\test_retrieval.py .\tests\test_autogen_review.py -q
+.\.venv\Scripts\python.exe -m pytest .\tests\test_appointment_lookup.py -v
+.\.venv\Scripts\python.exe -m pytest .\tests -q
+```
+
+Previously reported results after Task 14 integration:
+
+- Grounded-generation, retrieval, and AutoGen review tests: **18 passed**.
+- Appointment lookup tests: **11 passed**.
+- Full test suite after Task 14 integration: **115 passed, 0 failed**, with 661 CrewAI deprecation warnings.
+
+These are the previously observed results; rerun the commands after any further changes to establish the current state.
+
+### Dependency isolation
+
+AutoGen is installed in `.venv-autogen` with `autogen-agentchat==0.7.5` and `autogen-core==0.7.5`. The original `.venv` is preserved for the CrewAI application. `.venv-autogen/` is ignored by Git.
+
+The CrewAI integration launches the AutoGen review in a separate Python process using `.venv-autogen\Scripts\python.exe` and JSON over standard input/output. This avoids the known dependency conflict between the AutoGen protobuf requirement and the protobuf version in the original environment.
+
+### Limitations
+
+- The deterministic mock reviewer recognizes a limited set of configured refund-guarantee phrases. It is **not** a general semantic policy-compliance engine and may miss unsupported claims expressed in other wording.
+- The supported-draft approval case verifies the configured demonstration, not every possible answer or policy.
+- The review process is bounded to two AutoGen turns; that is a workflow bound, not a guarantee of factual correctness.
+- A mock LLM and disabled CrewAI telemetry do not, by themselves, prove zero network activity. Strict offline acceptance still requires testing with network access disabled or independently monitoring network activity.
+- The automated test file is the current reproducible evidence. Do not claim that separate saved Task 14 transcript files exist unless they have actually been generated and checked into the repository.
+
+### Integrated CrewAI + AutoGen Demonstration
+
+Task 14 includes a reproducible integration demonstration that runs the existing CrewAI support workflow and verifies the subsequent AutoGen policy-review stage.
+
+**Workflow**
+
+1. The CrewAI Retrieval Agent retrieves relevant knowledge-base context.
+2. The Response Composer produces the support response.
+3. The AutoGen `Policy_Compliance_Reviewer` evaluates the draft against the original retrieved context.
+4. The AutoGen `Final_Editor` produces a structured `ReviewVerdict`.
+5. The reviewed answer is returned as the final response.
+
+**Demonstration script:** `scripts/demo_task14_integration.py`
+
+Run these commands from the project root in PowerShell:
+
+```powershell
+$env:OPENAI_API_KEY = ""
+$env:CREWAI_DISABLE_TELEMETRY = "true"
+$env:CREWAI_TRACING_ENABLED = "false"
+$env:OTEL_SDK_DISABLED = "true"
+
+.\.venv\Scripts\python.exe .\scripts\demo_task14_integration.py
+```
+
+The script checks that:
+
+- The CrewAI RAG workflow executes.
+- The AutoGen review completes.
+- The review verdict contains a Boolean approval decision.
+- The review is bounded to two turns.
+- The reviewed answer matches the returned final output.
+- The structured response matches the final output.
+- Both AutoGen agents appear in the review trace.
+
+Successful execution ends with:
+
+```text
+DEMONSTRATION PASSED: integrated workflow checks succeeded.
+```
+
+**Run the handoff integration test:**
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest .\tests\test_crewai_support.py::test_task14_passes_composer_output_and_original_context_to_autogen -v
+```
+
+This test verifies that the actual CrewAI kickoff output is supplied as the AutoGen draft, the original retrieved context is preserved, and the reviewed answer is reflected in the final response.
+
+**Run the AutoGen review tests:**
+
+```powershell
+.\.venv-autogen\Scripts\python.exe -m pytest .\tests\test_autogen_review.py -v
+```
+
+**Execution environment:** CrewAI runs in `.venv`; AutoGen runs in the isolated `.venv-autogen` environment. The demonstration uses the configured deterministic mock components and does not require a live API key for the intended mock workflow.
+
+**Important limitation:** The deterministic AutoGen mock detects a limited set of configured unsupported refund-guarantee phrases. Passing these tests demonstrates the implemented workflow and configured test cases, not comprehensive semantic policy compliance. Setting an empty API key does not, by itself, prove that all dependencies or execution paths work without network access.
+
+
 ## Test suite
 
 Run the complete test suite from the repository root:
@@ -792,14 +934,16 @@ Run the complete test suite from the repository root:
 python -m pytest -v
 ```
 
-The latest previously reported full-suite run after Tasks 11–12 was:
+The latest verified full-suite run after Task 14 integration was:
 
 ```text
-110 passed, 0 failed
+115 passed, 0 failed
 661 CrewAI deprecation warnings
 ```
 
-This is the last recorded full-suite result; rerun the tests to establish the current result after subsequent Task 13 changes.
+This result was verified after adding the Composer-to-AutoGen handoff integration test and the integrated demonstration script.
+
+This is the latest recorded full-suite result after Task 14 integration; rerun the tests to establish the current result after any further changes.
 
 Dependency consistency check:
 
@@ -834,7 +978,9 @@ Passing tests do not by themselves prove every objective requirement or replace 
 - **Task 13 averages:** Accuracy 1.800/2; Grounding 2.000/2; Completeness 1.800/2; Safety 1.867/2.
 - **Task 13 overall normalized score:** 93.34% in the latest reported run.
 - **Task 13 review status:** Human review required because scoring is deterministic and pattern-based.
-- **Part 4:** Tasks 14–16 remain pending.
+- **Task 14 AutoGen review:** Two-agent, two-turn review stage with structured Pydantic verdicts, deterministic approval/revision examples, and CrewAI RAG integration. The mock reviewer only detects configured phrases.
+- **Task 14 tests:** 4 focused AutoGen review tests passed, the Composer-to-AutoGen handoff integration test passed, and the latest full suite reported **115 passed**.
+- **Part 4 remaining:** Task 15 governance/budget-cap controls and Task 16 response caching remain pending.
 
 ## Known limitations
 
@@ -852,14 +998,15 @@ Passing tests do not by themselves prove every objective requirement or replace 
 12. Task 13's judge is deterministic and pattern-based. Regex matches do not prove semantic entailment, and the grounding score relies on retrieval metadata rather than independently checking each answer claim against the full evidence text. Human review is required.
 13. The Task 13 evaluation includes three cases where the generated response did not match every expected fact: insurance-claim escalation, lab-test timing caveats, and telemedicine confirmation details. These gaps are reflected in the recorded scores and should not be hidden by inflating the results.
 14. The Task 13 score averages are outputs of the current scoring rules, not proof of production clinical accuracy, safety, or generalization.
-15. Part 4's AutoGen review, governance, budget cap and response-cache demonstrations remain pending.
+15. Task 14's deterministic AutoGen mock only recognizes a limited set of configured refund-guarantee phrases; it is not a general semantic policy-compliance engine.
+16. Part 4 Task 15 governance/budget-cap controls and Task 16 response caching remain pending.
 
 ## Remaining capstone work
 
 The remaining requirements from the capstone objective are:
 
 - **Part 3 — Task 13:** The 15-query evaluation has been implemented and its report structure verified. The current evaluator is a deterministic mock rubric, not a semantic LLM judge; human review is required.
-- **Part 4 — Task 14:** Demonstrate the AutoGen review stage approving one draft unchanged and revising another draft, with structured Pydantic verdicts.
+- **Part 4 — Task 14:** Implemented and tested. The AutoGen review stage approves a supported draft unchanged and revises a draft containing the configured unsupported refund guarantee, with structured Pydantic verdicts. The deterministic mock's phrase coverage is limited; see the Task 14 limitations.
 - **Part 4 — Task 15:** Demonstrate least-autonomy enforcement, provide a justified risk classification, and show that the runtime cost-budget cap rejects an oversized simulated request.
 - **Part 4 — Task 16:** Implement in-memory response caching keyed by normalized query text and demonstrate a repeated identical query producing a cache hit that avoids a redundant LLM/tool call, with before/after evidence.
 
@@ -869,6 +1016,6 @@ A strict zero-network claim still requires verification with network access disa
 
 ## Submission
 
-The final submission is one public GitHub repository containing the dataset, knowledge-base documents, RAG core, CrewAI orchestration, review stage, governance controls, FastAPI deployment, evaluation outputs, and transcripts demonstrating the required behavior under `MOCK_LLM` with zero API keys.
+The final submission is one public GitHub repository containing the dataset, knowledge-base documents, RAG core, CrewAI orchestration, AutoGen review stage, governance controls, FastAPI deployment, evaluation outputs, and transcripts demonstrating the required behavior under `MOCK_LLM` with zero API keys. Task 14 is implemented and tested; Tasks 15–16 are still pending and must be completed before the capstone can be described as complete.
 
 All healthcare policy and appointment information in this repository is synthetic. The Task 13 report must be interpreted in light of its deterministic scoring limitations and human-review requirement.
