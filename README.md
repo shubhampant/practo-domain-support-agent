@@ -1,7 +1,8 @@
 # Practo Domain Support Agent (CrewAI)
 
 **Capstone track: Practo (Healthcare).**
-This repository implements a local-first support-agent prototype for answering synthetic clinic-policy questions and looking up synthetic appointment records. **Part 1 — Tasks 1–5** and **Part 2 — Tasks 6–10** have implementation and automated-test evidence. **Task 8 is complete, including the required same-session and fresh-session transcript demonstrations.** Tasks 11–16 remain pending until their code, tests, and required demonstrations are added.
+
+This repository implements a local-first support-agent prototype for answering synthetic clinic-policy questions and looking up synthetic appointment records. Part 1 — Tasks 1–5 and Part 2 — Tasks 6–10 have implementation and automated-test evidence. Task 8 is complete, including the required same-session and fresh-session transcript demonstrations. Part 3 — Tasks 11–13 have implementation and verification evidence. Part 4 — Tasks 14–16 remains pending.
 
 > **Important simulation disclaimer:** The appointment data and all policy documents in this repository are synthetic capstone material. The fee ranges, cancellation window, turnaround times, and other policy statements are illustrative rules for this project, not official Practo policies or medical advice. Never use real patient data in this project.
 
@@ -20,10 +21,14 @@ This repository implements a local-first support-agent prototype for answering s
 - [Part 2 — Task 8: Session memory](#part-2--task-8-session-memory)
 - [Part 2 — Task 9: Structured response schema](#part-2--task-9-structured-response-schema)
 - [Part 2 — Task 10: Guardrails](#part-2--task-10-guardrails)
+- [Part 3 — Task 11: FastAPI deployment](#part-3--task-11-fastapi-deployment)
+- [Part 3 — Task 12: Structured logging](#part-3--task-12-structured-logging)
+- [Part 3 — Task 13: Answer-quality evaluation](#part-3--task-13-answer-quality-evaluation)
 - [Test suite](#test-suite)
 - [Current evaluation summary](#current-evaluation-summary)
 - [Known limitations](#known-limitations)
 - [Remaining capstone work](#remaining-capstone-work)
+- [Submission](#submission)
 
 ## Project status
 
@@ -34,13 +39,17 @@ This repository implements a local-first support-agent prototype for answering s
 | Part 1, Task 3 — two chunking/indexing strategies | Implemented | `chunking.py`, two ChromaDB collections |
 | Part 1, Task 4 — grounded generation and fallback | Complete | `grounded_generator.py`, `retrieval.py`, `transcripts/task4_grounded_generation.txt` |
 | Part 1, Task 5 — document-level precision/recall comparison | Complete | `run_evaluation.py`, `evaluation_results.md` |
-| Part 2, Task 6 — appointment lookup and escalation score | Implemented and tested | `appointment_lookup.py`, `tests/test_appointment_lookup.py`; 11 tests pass |
-| Part 2, Task 7 — CrewAI multi-agent orchestration | Implemented and tested | `crewai_support.py`, `tests/test_crewai_support.py`; deterministic mock LLM; 3 agents and `.kickoff()` |
-| Part 2, Task 8 — session memory | Complete: implementation, tests, and transcript demonstrations verified | `session_memory.py`, `tests/test_session_memory.py`, `tests/test_crewai_session_memory.py`, `transcripts/task8_same_session.txt`, `transcripts/task8_fresh_session.txt` |
-| Part 2, Task 9 — structured response schema | Implemented and tested | `response_schema.py`, `tests/test_response_schema.py`, `tests/test_crewai_structured_response.py` |
-| Part 2, Task 10 — guardrails | Implemented and tested | `guardrails.py`, `tests/test_guardrails.py`, `tests/test_crewai_guardrails.py`, `tests/test_grounded_generator.py` |
-| Part 3 — FastAPI, structured logs, 15-query evaluation | Not yet implemented/verified | To be documented after implementation |
-| Part 4 — AutoGen review, governance, budget, caching | Not yet implemented/verified | To be documented after implementation |
+| Part 2, Task 6 — appointment lookup and escalation score | Implemented and tested | `appointment_lookup.py`, `tests/test_appointment_lookup.py` |
+| Part 2, Task 7 — CrewAI multi-agent orchestration | Implemented and tested | `crewai_support.py`, `tests/test_crewai_support.py`; deterministic mock LLM; three agents and `.kickoff()` |
+| Part 2, Task 8 — session memory | Complete | `session_memory.py`, tests and same-session/fresh-session transcripts |
+| Part 2, Task 9 — structured response schema | Implemented and tested | `response_schema.py`, schema integration tests |
+| Part 2, Task 10 — guardrails | Implemented and tested | `guardrails.py`, guardrail and grounded-generation tests |
+| Part 3, Task 11 — FastAPI deployment | Implemented and verified | `api.py`, `tests/test_api.py`; HTTP, WebSocket and disconnect-recovery checks |
+| Part 3, Task 12 — structured logging | Implemented and tested | `api.py`, `tests/test_api.py`; JSONL events, trace IDs, timing and contact-number masking |
+| Part 3, Task 13 — 15-query answer-quality evaluation | Implemented and verified | `run_answer_quality_evaluation.py`, `answer_quality_dataset.py`, `answer_quality_results.json`, `task13_report_details.txt` |
+| Part 4, Task 14 — AutoGen review stage | Pending | Approval/revision demonstrations and structured verdicts remain to be completed |
+| Part 4, Task 15 — governance and budget cap | Pending | Least-autonomy enforcement, risk classification and runtime budget rejection remain to be completed |
+| Part 4, Task 16 — response caching | Pending | Cache-hit demonstration and before/after evidence remain to be completed |
 
 ## Implemented architecture
 
@@ -74,7 +83,25 @@ User query --------------------------+
                             answer generation/fallback
                                       |
                                       v
-                            transcript + evaluation
+                            CrewAI support workflow
+                            Retrieval Agent
+                            Lookup Agent
+                            Response Composer
+                                      |
+                                      v
+                            Structured response,
+                            guardrails and session memory
+                                      |
+                                      v
+                            FastAPI endpoints
+                            HTTP + WebSocket
+                                      |
+                                      v
+                            Structured request logging
+                                      |
+                                      v
+                            Task 13 answer-quality
+                            evaluation and JSON report
 ```
 
 The recommended retrieval strategy based on the current small benchmark is sentence-based chunking. It achieved higher mean document-level precision while retaining the same recall as fixed-size chunking.
@@ -83,11 +110,14 @@ The recommended retrieval strategy based on the current small benchmark is sente
 
 The development environment used for the verified runs was:
 
-- Windows with PowerShell (VS Code terminal).
-- Python **3.11.9** inside a project virtual environment at `.venv`.
-- SentenceTransformers with a local `all-MiniLM-L6-v2` model.
+- Windows with PowerShell, including the VS Code terminal.
+- Python 3.11.9 inside the project virtual environment at `.venv`.
+- SentenceTransformers with a local `all-MiniLM-L6-v2` embedding model.
 - ChromaDB for local vector storage.
+- CrewAI for multi-agent orchestration.
+- FastAPI for the application API.
 - Pytest for automated tests.
+- Deterministic mock-model behavior for the capstone's offline-oriented demonstrations.
 
 ### 1. Open the project and activate the virtual environment
 
@@ -105,7 +135,7 @@ Expected Python version:
 Python 3.11.9
 ```
 
-If PowerShell says the virtual environment does not exist, create it using the Python 3.11 installation and install the dependencies from the repository's dependency file, if present:
+If the virtual environment does not exist, create it using the Python 3.11 installation and install the dependencies from the repository's dependency file, if present:
 
 ```powershell
 py -3.11 -m venv .venv
@@ -114,7 +144,9 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
-The commands above are for environment setup. They may need network access if packages are not already cached or installed. **Runtime model inference should use the locally available embedding model and should not require an API key.** For a fully offline machine, prepare dependencies and the embedding model in advance, transfer them through the approved process, and verify runtime behavior with network access disabled.
+These are environment-setup commands. They may need network access if packages are not already cached or installed. Runtime model inference should use the locally available embedding model and should not require an API key.
+
+For a fully offline machine, prepare dependencies and the embedding model in advance, transfer them through the approved process, and verify runtime behavior with network access disabled.
 
 ### 2. Run the automated tests
 
@@ -122,7 +154,9 @@ The commands above are for environment setup. They may need network access if pa
 python -m pytest -v
 ```
 
-Latest verified result from the development session: **95 passed, 0 failed**. The run completed in 30.91 seconds and reported 506 CrewAI deprecation warnings. Warnings are not test failures, but should be reviewed when upgrading CrewAI.
+The latest previously reported full-suite run after Tasks 11–12 was **110 passed, 0 failed**, with 661 CrewAI deprecation warnings. Run the command again after any code changes to establish the current result.
+
+Warnings are not test failures, but they should be reviewed when upgrading CrewAI or related dependencies.
 
 ### 3. Reproduce the dataset generation
 
@@ -398,7 +432,7 @@ Run the complete regression suite:
 python -m pytest -v
 ```
 
-Latest verified complete-suite result: `95 passed, 0 failed` (506 CrewAI deprecation warnings).
+The latest previously reported complete-suite result after Tasks 11–12 was **110 passed, 0 failed**, with 661 CrewAI deprecation warnings.
 
 To reproduce the escalation count for the current deterministic dataset:
 
@@ -406,7 +440,7 @@ To reproduce the escalation count for the current deterministic dataset:
 python -c "from dataset import APPOINTMENTS; from appointment_lookup import check_appointment_status; results = [check_appointment_status(a['record_id']) for a in APPOINTMENTS]; escalated = [r for r in results if r['escalation_recommended']]; print('Total appointments:', len(results)); print('Escalation threshold: 0.8'); print('Escalated:', len(escalated)); print('Not escalated:', len(results) - len(escalated)); [print(r['record_id'], '| score:', r['escalation_score'], '| status:', r['status']) for r in escalated]"
 ```
 
-Verified result for the current seed-42 dataset: **7 of 50 records (14%)** are flagged for operational escalation and 43 are not. The seven IDs are `APT-0010`, `APT-0011`, `APT-0020`, `APT-0022`, `APT-0023`, `APT-0024`, and `APT-0050`. These counts depend on the dataset and scoring rule remaining unchanged.
+The previously verified result for the seed-42 dataset was **7 of 50 records (14%)** flagged for operational escalation and 43 not flagged. The seven IDs were `APT-0010`, `APT-0011`, `APT-0020`, `APT-0022`, `APT-0023`, `APT-0024`, and `APT-0050`. These counts depend on the dataset and scoring rule remaining unchanged.
 
 The corresponding tests are in `tests/test_appointment_lookup.py` and cover score boundaries, score range, lookup success, case/whitespace normalization, unknown IDs, and invalid inputs.
 
@@ -414,7 +448,9 @@ The corresponding tests are in `tests/test_appointment_lookup.py` and cover scor
 
 `crewai_support.py` builds a sequential CrewAI crew with three agents: Retrieval Agent, Lookup Agent, and Response Composer. The Retrieval Agent has access to the RAG lookup tool; the Lookup Agent has access to the appointment-status lookup tool. The crew runs through `.kickoff()` and uses the project's deterministic `DeterministicMockLLM` rather than a hosted inference API.
 
-Tool invocations and tool results are captured for test/audit inspection. The crew is configured with `tracing=False` and `memory=False`; session history is handled separately by the project's in-process memory implementation. **Do not treat these settings alone as proof of zero network traffic.** CrewAI telemetry must be disabled before kickoff and runtime network behavior verified for a strict offline claim.
+Tool invocations and tool results are captured for test/audit inspection. The crew is configured with `tracing=False` and `memory=False`; session history is handled separately by the project's in-process memory implementation.
+
+**Do not treat these settings alone as proof of zero network traffic.** CrewAI telemetry must be disabled before kickoff and runtime network behavior independently verified for a strict offline claim.
 
 Verify:
 
@@ -461,7 +497,7 @@ python -m pytest tests/test_response_schema.py tests/test_crewai_structured_resp
 
 `guardrails.py` implements the following safeguards:
 
-- **Fixed-format contact-number masking:** Indian mobile numbers, optionally prefixed by `+91`, are replaced with `[MASKED_CONTACT_NUMBER]` before RAG processing and session storage. This masker is not intended to identify arbitrary names, diagnoses, or insurance IDs in free text.
+- **Fixed-format contact-number masking:** Indian mobile numbers, optionally prefixed with `+91`, are replaced with `[MASKED_CONTACT_NUMBER]` before RAG processing and session storage. This masker is not intended to identify arbitrary names, diagnoses, or insurance IDs in free text.
 - **Prompt-injection detection:** suspicious instruction-override requests are rejected before CrewAI execution; the rejected raw query is not added to session history.
 - **Output groundedness check:** generated answer sentences are checked against retrieved evidence. Unsupported claims cause `GroundedSupportAgent.ask()` to return `insufficient_evidence` and a refusal message.
 
@@ -475,6 +511,279 @@ python -m pytest tests/test_guardrails.py tests/test_crewai_guardrails.py tests/
 
 The tests demonstrate contact masking, injection rejection before crew execution, and rejection of a deliberately unsupported generated answer.
 
+## Part 3 — Task 11: FastAPI deployment
+
+`api.py` exposes the support-agent application through FastAPI.
+
+### Start the server
+
+Activate the project virtual environment, then run this command from the project root:
+
+```powershell
+python -m uvicorn api:app --host 127.0.0.1 --port 8000
+```
+
+The server listens on `http://127.0.0.1:8000` on the local machine. Keep the server terminal open while testing. To stop it, press `Ctrl+C`.
+
+### HTTP endpoints
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `GET` | `/health` | Health check |
+| `POST` | `/ask` | Submit a support query to the RAG support crew |
+| `POST` | `/appointment-status` | Look up a synthetic appointment record |
+
+Example health check:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8000/health
+```
+
+Example support request:
+
+```powershell
+$body = @{ query = "What is the cancellation policy?" } |
+    ConvertTo-Json
+
+Invoke-RestMethod `
+    -Uri http://127.0.0.1:8000/ask `
+    -Method Post `
+    -ContentType "application/json" `
+    -Body $body
+```
+
+Example appointment lookup:
+
+```powershell
+$body = @{ record_id = "APT-0010" } | ConvertTo-Json
+
+Invoke-RestMethod `
+    -Uri http://127.0.0.1:8000/appointment-status `
+    -Method Post `
+    -ContentType "application/json" `
+    -Body $body
+```
+
+### WebSocket endpoint
+
+`ws://127.0.0.1:8000/ws/chat` supports multiple JSON messages over the same connection. Send a message such as:
+
+```json
+{"query": "What is the cancellation policy?"}
+```
+
+A successful response uses the `message` event type and includes a request ID, session ID, and structured support response. The server manages the WebSocket session ID. Invalid messages return an error event; a disconnected client should not prevent other clients from using the service.
+
+### Task 11 verification evidence
+
+- `python -m pytest tests/test_api.py -v`: 11 tests passed in the previously reported verification.
+- Local checks passed for `/health`, `/appointment-status`, and `/ask`.
+- A live WebSocket test passed for two turns on one connection with a stable session ID.
+- A live disconnect-recovery test passed: the health endpoint remained available and a new WebSocket client received a response.
+
+These checks verify the tested Task 11 behavior; they are not a production load or security assessment.
+
+## Part 3 — Task 12: Structured logging
+
+Task 12 adds structured request logging to the FastAPI application in `api.py`.
+
+The implementation records structured JSON Lines (JSONL) log events and includes request trace identifiers and timing information. The tested logging behavior also includes HTTP request logging and fixed-format contact-number masking.
+
+### Logging capabilities
+
+- Structured JSONL events for covered requests.
+- Trace IDs for correlating request-related events.
+- Timing information for request processing.
+- HTTP request logging.
+- Fixed-format contact-number masking for covered patterns.
+- Automated tests for the implemented logging and masking behavior.
+
+### Verify Task 12
+
+Run:
+
+```powershell
+python -m pytest tests/test_api.py -v
+```
+
+The previously reported Task 12/full-suite verification showed the API tests passing and a full-suite result of **110 passed, 0 failed**, with 661 CrewAI deprecation warnings.
+
+### Task 12 limitations
+
+The contact-number masker is fixed-format and does not identify every possible type of sensitive information. The implementation does not establish production-ready log retention, rotation, access controls, or a dedicated production logging destination. Logging tests cover the implemented behavior and should not be treated as a complete privacy or compliance audit.
+
+## Part 3 — Task 13: Answer-quality evaluation
+
+Task 13 implements a 15-query answer-quality evaluation under `MOCK_LLM`, reporting **Accuracy, Grounding, Completeness, and Safety** for every query and calculating the average of each metric across all 15 queries.
+
+### Files
+
+| File | Purpose |
+|---|---|
+| `answer_quality_dataset.py` | Defines the 15 evaluation cases, expected facts, and safety requirements |
+| `run_answer_quality_evaluation.py` | Runs the support crew, scores its responses, calculates averages, and writes the report |
+| `answer_quality_results.json` | Machine-readable evaluation report with per-query scores and metadata |
+| `task13_report_details.txt` | Detailed UTF-8 text/JSON export for inspection |
+| `patch_task13_judge.py` | Development patch script used during the evaluator work |
+| `patch_task13_safety.py` | Development patch script used during safety-pattern refinement |
+| `patch_task13_insurance.py` | Development patch script used during insurance-fact refinement |
+
+The patch scripts and backup files are development artifacts; the main evaluation entry point is `run_answer_quality_evaluation.py`.
+
+### Evaluation dataset coverage
+
+The evaluation dataset contains 15 cases:
+
+| Case | Topic | Coverage |
+|---:|---|---|
+| 1 | Appointment booking | Required KB topic |
+| 2 | Cancellation and rescheduling | Required KB topic |
+| 3 | Consultation fees | Required KB topic |
+| 4 | Emergency protocol | Required KB topic |
+| 5 | Follow-up discount | Required KB topic |
+| 6 | Home visits | Required KB topic |
+| 7 | Insurance claims | Required KB topic |
+| 8 | Lab-test turnaround | Required KB topic |
+| 9 | Patient privacy | Required KB topic |
+| 10 | Prescription refills | Required KB topic |
+| 11 | Second opinion | Required KB topic |
+| 12 | Telemedicine | Required KB topic |
+| 13 | Cancellation edge case | Edge case: completed appointments cannot be rescheduled |
+| 14 | Out-of-scope sports | Out of scope: FIFA World Cup 2018 winner |
+| 15 | Out-of-scope finance | Out of scope: current Bitcoin price |
+
+This covers all 12 required knowledge-base topics, one deliberately designed edge case, and two out-of-scope questions.
+
+The out-of-scope cases test whether the support system recognizes insufficient evidence instead of fabricating an answer from an unrelated healthcare knowledge base.
+
+### Scoring rubric
+
+Each property is scored on a 0–2 scale.
+
+| Score | Interpretation |
+|---:|---|
+| 0 | Fail |
+| 1 | Partial |
+| 2 | Pass |
+
+The four properties are defined as follows:
+
+- **Accuracy:** Checks expected facts and the retrieved result for supported factual content and material contradictions.
+- **Grounding:** Checks retrieval status and source metadata, including similarity and threshold information.
+- **Completeness:** Checks how many expected facts needed to answer the query are present in the response.
+- **Safety:** Checks for unsafe guarantees, specified safety signals, and unsafe handling patterns covered by the evaluator.
+
+Each query's report includes its scores and score rationales. The report also records the retrieval metadata and expected-fact checks used by the deterministic evaluator.
+
+### Run Task 13
+
+From the project root, with the virtual environment activated:
+
+```powershell
+python .\run_answer_quality_evaluation.py
+```
+
+The script runs the 15 test queries through the support crew in `rag` mode, uses a separate session ID for each evaluation case, evaluates the resulting answers, calculates metric averages, and writes:
+
+```text
+answer_quality_results.json
+```
+
+The detailed export used for inspection is:
+
+```text
+task13_report_details.txt
+```
+
+### Latest verified results
+
+The latest reported evaluation produced the following averages:
+
+| Metric | Average score | Maximum |
+|---|---:|---:|
+| Accuracy | 1.800 | 2 |
+| Grounding | 2.000 | 2 |
+| Completeness | 1.800 | 2 |
+| Safety | 1.867 | 2 |
+
+The reported overall normalized score is **93.34%**. Human review is required.
+
+These are the results recorded by the current deterministic scoring implementation. They are not an independently validated semantic-quality benchmark.
+
+### Validate the report structure
+
+After running the evaluation, use the following PowerShell command to validate the report's query count, score keys, rationale keys, averages, and judge metadata:
+
+```powershell
+@'
+import json
+from pathlib import Path
+
+path = Path("answer_quality_results.json")
+report = json.loads(path.read_text(encoding="utf-8"))
+results = report.get("results", [])
+
+required = {"accuracy", "grounding", "completeness", "safety"}
+
+print("Query count:", len(results))
+print("Reported query count:", report.get("query_count"))
+print("Metric averages:", report.get("metric_averages"))
+
+print(
+    "All 15 records have four scores:",
+    len(results) == 15 and all(
+        set(item.get("scores", {})) == required
+        for item in results
+    )
+)
+
+print(
+    "All records have four rationales:",
+    len(results) == 15 and all(
+        set(item.get("score_rationales", {})) == required
+        for item in results
+    )
+)
+
+print("Judge mode:", report.get("judge_mode"))
+print("Judge type:", report.get("judge_type"))
+'@ | python -
+```
+
+The previously verified output was:
+
+```text
+Query count: 15
+Reported query count: 15
+Metric averages: {'accuracy': 1.8, 'grounding': 2, 'completeness': 1.8, 'safety': 1.867}
+All 15 records have four scores: True
+All records have four rationales: True
+Judge mode: MOCK_LLM
+Judge type: task13_deterministic_mock_llm
+```
+
+Run the evaluation again before submission if any code, dataset, or scoring rules change.
+
+### Important evaluator limitation
+
+The current Task 13 judge is **deterministic and pattern-based, not a genuine semantic LLM judge**.
+
+The evaluator supplies a rubric prompt and uses explicit, auditable rules and pattern matching to simulate the four scoring dimensions. The metadata identifies the evaluation mode as `MOCK_LLM` and the judge type as `task13_deterministic_mock_llm`.
+
+The separate CrewAI support crew also uses a deterministic mock model. That mock model is used for the support workflow; it should not be confused with a model that semantically evaluates answer quality.
+
+The scores have the following limitations:
+
+1. Regex matches do not prove that a statement is semantically entailed by its source.
+2. A response may express a correct fact using wording that the patterns do not recognize.
+3. Grounding is approximated from retrieval status, source filenames, similarity and the configured threshold. It does not independently verify every answer claim against the raw evidence text.
+4. Safety scoring detects only the unsafe patterns and safety signals explicitly encoded in the evaluator. It is not a comprehensive clinical safety assessment.
+5. Out-of-scope scoring checks the evaluator's defined insufficient-evidence behavior; a high score does not establish general out-of-domain reliability.
+
+The report records these limitations and sets `human_review_required` to `true`. **Human review is required before treating the scores as evidence of production answer quality or healthcare safety.**
+
+The evaluator should be described accurately in demonstrations and submission material: it is a deterministic mock evaluation harness operating in `MOCK_LLM` mode, not a semantic LLM-as-judge implementation.
+
 ## Test suite
 
 Run the complete test suite from the repository root:
@@ -483,11 +792,14 @@ Run the complete test suite from the repository root:
 python -m pytest -v
 ```
 
-Latest verified run:
+The latest previously reported full-suite run after Tasks 11–12 was:
 
 ```text
-95 passed, 506 warnings in 30.91s
+110 passed, 0 failed
+661 CrewAI deprecation warnings
 ```
+
+This is the last recorded full-suite result; rerun the tests to establish the current result after subsequent Task 13 changes.
 
 Dependency consistency check:
 
@@ -495,25 +807,34 @@ Dependency consistency check:
 python -m pip check
 ```
 
-Latest verified result:
+The previously reported result was:
 
 ```text
 No broken requirements found.
 ```
 
-The tests cover dataset generation, chunking, knowledge-base structure, retrieval behavior, grounded generation, appointment lookup, CrewAI orchestration, session memory, structured responses, and guardrails. Passing tests do not by themselves prove every objective requirement or replace required demonstration transcripts.
+The tests cover dataset generation, chunking, knowledge-base structure, retrieval behavior, grounded generation, appointment lookup, CrewAI orchestration, session memory, structured responses, guardrails, and the FastAPI application.
+
+Passing tests do not by themselves prove every objective requirement or replace the required demonstration transcripts and evaluation reports.
 
 ## Current evaluation summary
 
-- Dataset: 50 records; 5 categories; 5 statuses; 22% follow-up-required records.
-- Knowledge base: 12 required topic documents.
-- Chunking: 26 fixed-size chunks and 36 sentence-based chunks in separate collections.
-- Embeddings: local `all-MiniLM-L6-v2`, 384 dimensions.
-- Threshold: 0.4026, empirically selected from five in-scope and two out-of-scope query measurements.
-- Grounded generation: five in-scope demonstrations and an out-of-scope fallback.
-- Retrieval benchmark: fixed-size precision/recall = 0.500/1.000; sentence-based = 0.900/1.000.
-- Task 6 escalation rule: threshold 0.8; 7/50 synthetic appointments (14%) flagged in the current dataset.
-- Automated tests: 95 passed, 0 failed in the latest reported run; 506 CrewAI deprecation warnings were reported.
+- **Dataset:** 50 synthetic appointment records, five categories, five statuses, and 22% follow-up-required records.
+- **Knowledge base:** 12 required topic documents.
+- **Chunking:** 26 fixed-size chunks and 36 sentence-based chunks in separate collections.
+- **Embeddings:** Local `all-MiniLM-L6-v2`, 384 dimensions.
+- **Retrieval threshold:** 0.4026, empirically selected from five in-scope and two out-of-scope query measurements.
+- **Grounded generation:** Five in-scope demonstrations and an out-of-scope fallback.
+- **Retrieval benchmark:** Fixed-size precision/recall = 0.500/1.000; sentence-based = 0.900/1.000.
+- **Task 6 escalation rule:** Threshold 0.8; the previously verified seed-42 dataset flagged 7/50 synthetic appointments (14%).
+- **Task 8 session memory:** In-process memory with same-session and fresh-session transcript demonstrations.
+- **Task 11 API:** HTTP endpoints and WebSocket behavior tested, including disconnect recovery.
+- **Task 12 logging:** Structured JSONL events, trace IDs, timing and contact-number masking implemented and tested.
+- **Task 13 evaluation:** 15 queries, four scores and four score rationales per query, with averages reported.
+- **Task 13 averages:** Accuracy 1.800/2; Grounding 2.000/2; Completeness 1.800/2; Safety 1.867/2.
+- **Task 13 overall normalized score:** 93.34% in the latest reported run.
+- **Task 13 review status:** Human review required because scoring is deterministic and pattern-based.
+- **Part 4:** Tasks 14–16 remain pending.
 
 ## Known limitations
 
@@ -523,20 +844,31 @@ The tests cover dataset generation, chunking, knowledge-base structure, retrieva
 4. Retrieval metrics do not measure the correctness, completeness, or safety of every generated answer.
 5. The embedding model and dependencies must be prepared locally before running in a completely offline environment.
 6. Task 6 escalation is a synthetic operational rule, not a clinically validated measure.
-7. Task 8 memory is in-process only; process restart clears the session state. The required same-session and fresh-session transcript demonstrations are saved under `transcripts/`.
+7. Task 8 memory is in-process only; a process restart clears the session state. The required same-session and fresh-session transcript demonstrations are saved under `transcripts/`.
 8. Task 10 groundedness validation uses lexical token overlap as a deterministic heuristic. It can miss unsupported claims or reject valid paraphrases; it is not a semantic fact-checker.
-9. CrewAI deprecation warnings remain. `tracing=False` is configured, but that alone is not proof of zero outbound network traffic. Set telemetry-disabling environment variables before `crew.kickoff()` and verify behavior in the target environment.
+9. CrewAI deprecation warnings remain. `tracing=False` alone is not proof of zero outbound network traffic. Set telemetry-disabling environment variables before `crew.kickoff()` and independently verify behavior in the target environment.
+10. Task 11 has been verified with automated and local smoke tests, but has not undergone production load testing, external security testing, authentication/authorization review, or healthcare compliance assessment.
+11. Task 12 logging and PII-masking tests pass for the covered cases. The fixed-format masker does not identify all types of sensitive information. The implementation does not configure a dedicated production log destination, retention, rotation, or production log-access controls.
+12. Task 13's judge is deterministic and pattern-based. Regex matches do not prove semantic entailment, and the grounding score relies on retrieval metadata rather than independently checking each answer claim against the full evidence text. Human review is required.
+13. The Task 13 evaluation includes three cases where the generated response did not match every expected fact: insurance-claim escalation, lab-test timing caveats, and telemedicine confirmation details. These gaps are reflected in the recorded scores and should not be hidden by inflating the results.
+14. The Task 13 score averages are outputs of the current scoring rules, not proof of production clinical accuracy, safety, or generalization.
+15. Part 4's AutoGen review, governance, budget cap and response-cache demonstrations remain pending.
 
 ## Remaining capstone work
 
 The remaining requirements from the capstone objective are:
 
-- **Part 2 — Tasks 6–10:** implementation and test evidence are present; Task 8 also has the required same-session and fresh-session transcripts.
-- **Part 3 — Tasks 11–13:** at least two FastAPI HTTP endpoints and a WebSocket endpoint; structured JSONL logs with trace IDs and masked request text; 15-query evaluation reporting Accuracy, Grounding, Completeness, and Safety per query and as averages.
-- **Part 4 — Tasks 14–16:** two-agent AutoGen review stage with approval and revision demonstrations; least-autonomy governance, risk classification, and runtime budget cap; response-cache hit demonstration.
+- **Part 3 — Task 13:** The 15-query evaluation has been implemented and its report structure verified. The current evaluator is a deterministic mock rubric, not a semantic LLM judge; human review is required.
+- **Part 4 — Task 14:** Demonstrate the AutoGen review stage approving one draft unchanged and revising another draft, with structured Pydantic verdicts.
+- **Part 4 — Task 15:** Demonstrate least-autonomy enforcement, provide a justified risk classification, and show that the runtime cost-budget cap rejects an oversized simulated request.
+- **Part 4 — Task 16:** Implement in-memory response caching keyed by normalized query text and demonstrate a repeated identical query producing a cache hit that avoids a redundant LLM/tool call, with before/after evidence.
 
-The CrewAI crew uses deterministic `MOCK_LLM` mode and extends `crewai.llms.base_llm.BaseLLM`; it does not require hosted-model API keys for inference. For strict offline acceptance, set `CREWAI_DISABLE_TELEMETRY=true` (or `OTEL_SDK_DISABLED=true`) before importing/running CrewAI and before calling `crew.kickoff()`. The transcript-generation script sets these variables before importing project modules. A strict zero-network claim still requires verification with network access disabled or network activity independently monitored; a mock LLM alone does not prove that no other component attempts an outbound connection.
+The CrewAI crew uses deterministic `MOCK_LLM` mode and extends `crewai.llms.base_llm.BaseLLM`; it does not require hosted-model API keys for inference. For strict offline acceptance, set `CREWAI_DISABLE_TELEMETRY=true` or `OTEL_SDK_DISABLED=true` before importing/running CrewAI and before calling `crew.kickoff()`. The transcript-generation script sets these variables before importing project modules.
+
+A strict zero-network claim still requires verification with network access disabled or network activity independently monitored; a mock LLM alone does not prove that no other component attempts an outbound connection.
 
 ## Submission
 
 The final submission is one public GitHub repository containing the dataset, knowledge-base documents, RAG core, CrewAI orchestration, review stage, governance controls, FastAPI deployment, evaluation outputs, and transcripts demonstrating the required behavior under `MOCK_LLM` with zero API keys.
+
+All healthcare policy and appointment information in this repository is synthetic. The Task 13 report must be interpreted in light of its deterministic scoring limitations and human-review requirement.
